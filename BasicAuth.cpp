@@ -267,23 +267,30 @@ lopaStr BA::BABrute(const char *ipOrig, const int port, bool performDoubleCheck)
     return lps;
 }
 
-lopaStr BA::BALobby(const std::string& ip, int port, bool performDoubleCheck) {
-    static std::atomic<int> BrutingThrds(0);
-    
-    if (gMaxBrutingThreads > 0) {
-        while (BrutingThrds >= gMaxBrutingThreads) {
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-        }
 
-        ++baCount;
-        ++BrutingThrds;
-        stt->doEmitionUpdateArc(gTargets);
-        
-        lopaStr lps = BABrute(ip.c_str(), port, performDoubleCheck);
-        
-        --BrutingThrds;
-        return lps;
-    } else {
-        return {"UNKNOWN", "", ""};
+std::optional<lopaStr> BA::BALobby(const std::string& ip, int port, bool performDoubleCheck) {
+    static std::atomic<int> BrutingThrds(0);
+    static std::mutex mtx;
+    static std::condition_variable cv;
+    
+    if (gMaxBrutingThreads <= 0) {
+        return std::nullopt;
     }
+
+    std::unique_lock<std::mutex> lock(mtx);
+    cv.wait(lock, [] { return BrutingThrds < gMaxBrutingThreads; });
+
+    ++baCount;
+    ++BrutingThrds;
+    lock.unlock();
+
+    stt->doEmitionUpdateArc(gTargets);
+    
+    lopaStr lps = BABrute(ip.c_str(), port, performDoubleCheck);
+    
+    lock.lock();
+    --BrutingThrds;
+    cv.notify_one();
+
+    return lps;
 }
