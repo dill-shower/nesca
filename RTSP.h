@@ -1,19 +1,20 @@
-#pragma once
-#ifndef RTSPAUTH_H
-#define RTSPAUTH_H
+#ifndef RTSP_H
+#define RTSP_H
 
+#include <string>
 #include "Utils.h"
 #include "Connector.h"
-#include "externData.h"
-#include "mainResources.h"
+#include "FileUpdater.h"
 
-class RTSP
-{
-private:
-	static lopaStr RTSPBrute(const char *ip, const int port);
-public:
-	static lopaStr RTSPLobby(const char *ip, const int port);
+struct lopaStr {
+    char login[32];
+    char pass[32];
+    char other[32];
 };
 
-#endif // RTSPAUTH_H
+namespace RTSP {
+    lopaStr RTSPBrute(const char *ip, int port);
+    lopaStr RTSPLobby(const char *ip, int port);
+}
 
+#endif // RTSP_H
