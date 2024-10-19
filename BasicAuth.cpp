@@ -8,8 +8,8 @@ int BA::checkOutput(const string *buffer, const char *ip, const int port) {
 			&& Utils::ustrstr(*buffer, "http/1.0 401 ") == -1
 			&& Utils::ustrstr(*buffer, "<statusValue>401</statusValue>") == -1
 			&& Utils::ustrstr(*buffer, "<statusString>Unauthorized</statusString>") == -1
-			&& Utils::ustrstr(*buffer, "�����������") == -1
-			&& Utils::ustrstr(*buffer, "Неправильны") == -1
+			&& Utils::ustrstr(*buffer, "íåïðàâèëüíû") == -1
+			&& Utils::ustrstr(*buffer, "ÐÐµÐ¿Ñ€Ð°Ð²Ð¸Ð»ÑŒÐ½Ñ‹") == -1
 			&& Utils::ustrstr(*buffer, "code: \"401\"") == -1 //77.51.196.31:81
             ) {
         return 1;
@@ -58,25 +58,35 @@ std::string getLocation(const std::string *buff) {
 }
 
 void setNewIP(const char *ipOrig, char *ip, std::string *buff, int size) {
-	strncpy(ip, ipOrig, size);
-	const std::string &location = getLocation(buff);
-	if (location.size() > 0) {
-		if (Utils::ustrstr(location, "http") != -1) {
-			strncpy(ip, location.c_str(), size);
-		}
-		else {
-			int ipLength = (int)strstr(ipOrig + 8, "/");
-			if (0 != ipLength) {
-				strncpy(ip, ipOrig, ipLength);
-				strncat(ip, location.c_str(), size - ipLength);
-			}
-			else {
-				strncat(ip, location.c_str(), size);
-			}
-		}
-	}
-}
+    std::string location = getLocation(buff);
+    
+    // Безопасное копирование исходного IP
+    strncpy(ip, ipOrig, size - 1);
+    ip[size - 1] = '\0';
 
+    if (!location.empty()) {
+        if (location.find("http") != std::string::npos) {
+            // Если location содержит "http", копируем его в ip
+            strncpy(ip, location.c_str(), size - 1);
+            ip[size - 1] = '\0';
+        } else {
+            const char* slashPos = strchr(ipOrig + 8, '/');
+            if (slashPos != nullptr) {
+                // Если в ipOrig есть '/', копируем часть до '/' и добавляем location
+                ptrdiff_t ipLength = slashPos - ipOrig;
+                if (ipLength < size) {
+                    strncpy(ip, ipOrig, ipLength);
+                    strncat(ip, location.c_str(), size - ipLength - 1);
+                    ip[size - 1] = '\0';
+                }
+            } else {
+                // Если '/' нет, просто добавляем location к ip
+                strncat(ip, location.c_str(), size - strlen(ip) - 1);
+                ip[size - 1] = '\0';
+            }
+        }
+    }
+}
 lopaStr BA::BABrute(const char *ipOrig, const int port, bool performDoubleCheck) {
 	bool digestMode = true;
 	string lpString;
