@@ -1,32 +1,38 @@
 #include "BasicAuth.h"
 
-int BA::checkOutput(const string *buffer, const char *ip, const int port) {
-    if((Utils::ustrstr(*buffer, "200 ok") != -1 ||
-            Utils::ustrstr(*buffer, "http/1.0 200") != -1 ||
-			Utils::ustrstr(*buffer, "http/1.1 200") != -1)
-			&& Utils::ustrstr(*buffer, "http/1.1 401 ") == -1
-			&& Utils::ustrstr(*buffer, "http/1.0 401 ") == -1
-			&& Utils::ustrstr(*buffer, "<statusValue>401</statusValue>") == -1
-			&& Utils::ustrstr(*buffer, "<statusString>Unauthorized</statusString>") == -1
-			&& Utils::ustrstr(*buffer, "íåïðàâèëüíû") == -1
-			&& Utils::ustrstr(*buffer, "ÐÐµÐ¿Ñ€Ð°Ð²Ð¸Ð»ÑŒÐ½Ñ‹") == -1
-			&& Utils::ustrstr(*buffer, "code: \"401\"") == -1 //77.51.196.31:81
-            ) {
-        return 1;
-	}
-	else if (Utils::ustrstr(*buffer, "http/1.1 404") != -1
-		|| Utils::ustrstr(*buffer, "http/1.0 404") != -1) return -2; 
-	else if (Utils::ustrstr(*buffer, "503 service unavailable") != -1
-		|| Utils::ustrstr(*buffer, "http/1.1 503") != -1
-		|| Utils::ustrstr(*buffer, "http/1.0 503") != -1
-		|| Utils::ustrstr(*buffer, "400 BAD_REQUEST") != -1
-		|| Utils::ustrstr(*buffer, "400 bad request") != -1
-		|| Utils::ustrstr(*buffer, "403 Forbidden") != -1
-		)
-	{
-		Sleep(30000);
-		return -1;
-	}
+int BA::checkOutput(const string& buffer, const char* ip, const int port) {
+    const std::vector<std::string> successPatterns = {"200 ok", "http/1.0 200", "http/1.1 200"};
+    const std::vector<std::string> failPatterns = {
+        "http/1.1 401 ", "http/1.0 401 ", "<statusValue>401</statusValue>",
+        "<statusString>Unauthorized</statusString>", "íåïðàâèëüíû",
+        "ÐÐµÐ¿Ñ€Ð°Ð²Ð¸Ð»ÑŒÐ½Ñ‹", "code: \"401\""
+    };
+
+    auto findIgnoreCase = [](const std::string& str, const std::string& substr) {
+        auto it = std::search(
+            str.begin(), str.end(),
+            substr.begin(), substr.end(),
+            [](char ch1, char ch2) { return std::tolower(ch1) == std::tolower(ch2); }
+        );
+        return (it != str.end());
+    };
+
+    bool success = std::any_of(successPatterns.begin(), successPatterns.end(),
+                               [&](const std::string& pattern) { return findIgnoreCase(buffer, pattern); });
+    bool fail = std::any_of(failPatterns.begin(), failPatterns.end(),
+                            [&](const std::string& pattern) { return findIgnoreCase(buffer, pattern); });
+
+    if (success && !fail) return 1;
+    if (findIgnoreCase(buffer, "http/1.1 404") || findIgnoreCase(buffer, "http/1.0 404")) return -2;
+    if (findIgnoreCase(buffer, "503 service unavailable") ||
+        findIgnoreCase(buffer, "http/1.1 503") ||
+        findIgnoreCase(buffer, "http/1.0 503") ||
+        findIgnoreCase(buffer, "400 BAD_REQUEST") ||
+        findIgnoreCase(buffer, "400 bad request") ||
+        findIgnoreCase(buffer, "403 Forbidden")) {
+        std::this_thread::sleep_for(std::chrono::seconds(30));
+        return -1;
+    }
 
     return 0;
 }
