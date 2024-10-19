@@ -1,7 +1,6 @@
 #include "BasicAuth.h"
 
 int BA::checkOutput(const string& buffer, const char* ip, const int port) {
-int BA::checkOutput(const string& buffer, const char* ip, const int port) {
     const std::vector<std::string> successPatterns = {"200 ok", "http/1.0 200", "http/1.1 200"};
     const std::vector<std::string> failPatterns = {
         "http/1.1 401 ", "http/1.0 401 ", "<statusValue>401</statusValue>",
